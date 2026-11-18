@@ -39,7 +39,7 @@ public class TokenService {
                 .subject(usuario.getRut())
                 .issuedAt(ahora)
                 .expiresAt(ahora.plus(minutos, ChronoUnit.MINUTES))
-                .claim("rol", usuario.getRol().name())
+                .claim("rol", usuario.getNombreRol().name())
                 .build();
         JwsHeader cabecera = JwsHeader.with(MacAlgorithm.HS256).build();
         return encoder.encode(JwtEncoderParameters.from(cabecera, claims)).getTokenValue();

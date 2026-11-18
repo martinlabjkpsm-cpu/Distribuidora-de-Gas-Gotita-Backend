@@ -13,7 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/productos")
+@RequestMapping("/api/v1/productos")
 @Tag(name = "Productos", description = "Catálogo de cilindros, reguladores, mangueras y accesorios")
 public class ProductoController {
 
@@ -56,7 +56,7 @@ public class ProductoController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     @SecurityRequirement(name = "bearerAuth")
-    @Operation(summary = "Eliminar producto", description = "ADMINISTRADOR. 409 si el producto ya está en pedidos.")
+    @Operation(summary = "Eliminar producto", description = "ADMINISTRADOR. Si el producto ya se vendió, se desactiva (deja de mostrarse) en vez de borrarse.")
     public void eliminar(@PathVariable String codigo) {
         catalogo.eliminarProducto(codigo);
     }

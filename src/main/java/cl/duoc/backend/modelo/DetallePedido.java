@@ -6,16 +6,17 @@ import jakarta.persistence.*;
 @Table(name = "detalle_pedido")
 public class DetallePedido {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @EmbeddedId
+    private DetallePedidoId id;
 
+    @MapsId("idPedido")
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "pedido_id", nullable = false)
+    @JoinColumn(name = "id_pedido")
     private Pedido pedido;
 
+    @MapsId("idProducto")
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "producto_codigo", nullable = false)
+    @JoinColumn(name = "id_producto")
     private Producto producto;
 
     @Column(nullable = false)
@@ -25,24 +26,26 @@ public class DetallePedido {
     @Column(name = "precio_unitario", nullable = false)
     private int precioUnitario;
 
-    @Column(nullable = false)
-    private int subtotal;
-
     protected DetallePedido() {
     }
 
-    public DetallePedido(Producto producto, int cantidad, int precioUnitario) {
+    /** El pedido ya debe tener id (se guarda antes de agregar sus detalles). */
+    public DetallePedido(Pedido pedido, Producto producto, int cantidad, int precioUnitario) {
+        this.id = new DetallePedidoId(pedido.getId(), producto.getId());
+        this.pedido = pedido;
         this.producto = producto;
         this.cantidad = cantidad;
         this.precioUnitario = precioUnitario;
-        this.subtotal = cantidad * precioUnitario;
     }
 
-    public Long getId() { return id; }
+    /** No es columna: se calcula. */
+    public int getSubtotal() {
+        return cantidad * precioUnitario;
+    }
+
+    public DetallePedidoId getId() { return id; }
     public Pedido getPedido() { return pedido; }
-    void setPedido(Pedido pedido) { this.pedido = pedido; }
     public Producto getProducto() { return producto; }
     public int getCantidad() { return cantidad; }
     public int getPrecioUnitario() { return precioUnitario; }
-    public int getSubtotal() { return subtotal; }
 }

@@ -6,7 +6,7 @@ import cl.duoc.backend.dto.AuthDtos.TokenResponse;
 import cl.duoc.backend.dto.UsuarioDtos.UsuarioResponse;
 import cl.duoc.backend.excepcion.ConflictoException;
 import cl.duoc.backend.excepcion.NoAutenticadoException;
-import cl.duoc.backend.modelo.Rol;
+import cl.duoc.backend.modelo.NombreRol;
 import cl.duoc.backend.modelo.Usuario;
 import cl.duoc.backend.repositorio.UsuarioRepository;
 import cl.duoc.backend.seguridad.LimiteIntentosLogin;
@@ -23,15 +23,17 @@ public class AuthService {
     private static final String CREDENCIALES_INCORRECTAS = "RUT o contraseña incorrectos";
 
     private final UsuarioRepository usuarios;
+    private final RolService roles;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokens;
     private final LimiteIntentosLogin limite;
     /** Hash de relleno: se compara aunque el RUT no exista, para que la respuesta tarde lo mismo. */
     private final String hashDeRelleno;
 
-    public AuthService(UsuarioRepository usuarios, PasswordEncoder passwordEncoder,
+    public AuthService(UsuarioRepository usuarios, RolService roles, PasswordEncoder passwordEncoder,
                        TokenService tokens, LimiteIntentosLogin limite) {
         this.usuarios = usuarios;
+        this.roles = roles;
         this.passwordEncoder = passwordEncoder;
         this.tokens = tokens;
         this.limite = limite;
@@ -49,7 +51,8 @@ public class AuthService {
         if (usuarios.existsByEmailIgnoreCase(email)) {
             throw new ConflictoException("Ya existe una cuenta con ese correo");
         }
-        Usuario nuevo = new Usuario(rut, req.nombre().trim(), email, passwordEncoder.encode(req.password()), Rol.CLIENTE);
+        Usuario nuevo = new Usuario(rut, req.nombre().trim(), email, UsuarioService.limpiarTelefono(req.telefono()),
+                passwordEncoder.encode(req.password()), roles.obtener(NombreRol.CLIENTE));
         return UsuarioResponse.de(usuarios.save(nuevo));
     }
 

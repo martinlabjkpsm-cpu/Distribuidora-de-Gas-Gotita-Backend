@@ -3,6 +3,7 @@ package cl.duoc.backend.controlador;
 import cl.duoc.backend.dto.PedidoDtos.AsignarRepartidorRequest;
 import cl.duoc.backend.dto.PedidoDtos.CambiarEstadoRequest;
 import cl.duoc.backend.dto.PedidoDtos.CrearPedidoRequest;
+import cl.duoc.backend.dto.PedidoDtos.HistorialResponse;
 import cl.duoc.backend.dto.PedidoDtos.PedidoResponse;
 import cl.duoc.backend.dto.PedidoDtos.RendicionResponse;
 import cl.duoc.backend.modelo.EstadoPedido;
@@ -19,7 +20,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/pedidos")
+@RequestMapping("/api/v1/pedidos")
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Pedidos", description = "Operación principal: pedido de gas, asignación y entrega")
 public class PedidoController {
@@ -36,7 +37,7 @@ public class PedidoController {
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('CLIENTE','ADMINISTRADOR')")
     @Operation(summary = "Crear pedido", description = "CLIENTE o ADMINISTRADOR. El servidor toma el cliente del token, "
-            + "calcula precios y total, y descuenta stock. 409 si no hay stock suficiente.")
+            + "calcula precios y total, descuenta stock y genera el código PED-xxxx. 409 si no hay stock suficiente.")
     public PedidoResponse crear(@Valid @RequestBody CrearPedidoRequest req, Authentication auth) {
         return pedidos.crear(req, usuarioActual.obtener(auth));
     }
@@ -56,30 +57,37 @@ public class PedidoController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Detalle de un pedido", description = "403 si el pedido no es del cliente o no está asignado al repartidor. 404 si no existe.")
-    public PedidoResponse obtener(@PathVariable Long id, Authentication auth) {
+    public PedidoResponse obtener(@PathVariable Integer id, Authentication auth) {
         return pedidos.obtener(id, usuarioActual.obtener(auth));
+    }
+
+    @GetMapping("/{id}/historial")
+    @Operation(summary = "Historial de estados", description = "Mismo permiso que el detalle. Una fila por cada cambio de estado.")
+    public List<HistorialResponse> historial(@PathVariable Integer id, Authentication auth) {
+        return pedidos.historial(id, usuarioActual.obtener(auth));
     }
 
     @PatchMapping("/{id}/repartidor")
     @PreAuthorize("hasAnyRole('OPERADOR','ADMINISTRADOR')")
     @Operation(summary = "Asignar repartidor", description = "OPERADOR o ADMINISTRADOR. Solo pedidos PENDIENTE (409 si no).")
-    public PedidoResponse asignar(@PathVariable Long id, @Valid @RequestBody AsignarRepartidorRequest req) {
+    public PedidoResponse asignar(@PathVariable Integer id, @Valid @RequestBody AsignarRepartidorRequest req) {
         return pedidos.asignarRepartidor(id, req.rutRepartidor());
     }
 
     @PatchMapping("/{id}/estado")
     @PreAuthorize("hasAnyRole('REPARTIDOR','OPERADOR','ADMINISTRADOR')")
     @Operation(summary = "Cambiar estado", description = "PENDIENTE->EN_CAMINO->ENTREGADO; CANCELADO solo desde PENDIENTE. "
-            + "El REPARTIDOR solo sobre sus pedidos y no puede cancelar. 409 si la transición no es válida.")
-    public PedidoResponse cambiarEstado(@PathVariable Long id, @Valid @RequestBody CambiarEstadoRequest req, Authentication auth) {
-        return pedidos.cambiarEstado(id, req.estado(), usuarioActual.obtener(auth));
+            + "409 si pasa a EN_CAMINO sin repartidor o si la transición no es válida. El REPARTIDOR solo sobre sus pedidos. "
+            + "Al pasar a ENTREGADO se registra el pago.")
+    public PedidoResponse cambiarEstado(@PathVariable Integer id, @Valid @RequestBody CambiarEstadoRequest req, Authentication auth) {
+        return pedidos.cambiarEstado(id, req.estado(), req.comprobante(), usuarioActual.obtener(auth));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasRole('ADMINISTRADOR')")
-    @Operation(summary = "Eliminar pedido", description = "ADMINISTRADOR. Si no estaba entregado, devuelve el stock.")
-    public void eliminar(@PathVariable Long id) {
+    @Operation(summary = "Eliminar pedido", description = "ADMINISTRADOR. 409 si ya tiene pago. Si no estaba entregado, devuelve el stock.")
+    public void eliminar(@PathVariable Integer id) {
         pedidos.eliminar(id);
     }
 }

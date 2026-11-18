@@ -1,7 +1,8 @@
 package cl.duoc.backend.modelo;
 
 import jakarta.persistence.*;
-import java.time.Instant;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,45 +12,57 @@ public class Pedido {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @Column(name = "id_pedido")
+    private Integer id;
 
-    /** Dueño del pedido: se toma del JWT, nunca del cuerpo de la solicitud. */
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "cliente_id", nullable = false)
-    private Usuario cliente;
+    /** Código visible del pedido (PED-1001). Lo genera el servidor a partir del id. */
+    @Column(nullable = false, unique = true, length = 12)
+    private String codigo;
 
-    /** Repartidor asignado por la operadora (puede ser nulo mientras está PENDIENTE). */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "repartidor_id")
-    private Usuario repartidor;
+    @Column(nullable = false)
+    private LocalDateTime fecha = LocalDateTime.now();
 
     @Column(nullable = false, length = 200)
     private String direccion;
 
-    @Column(nullable = false, length = 60)
-    private String zona;
+    @Column(name = "latitud_entrega", precision = 9, scale = 6)
+    private BigDecimal latitudEntrega;
+
+    @Column(name = "longitud_entrega", precision = 9, scale = 6)
+    private BigDecimal longitudEntrega;
 
     @Column(length = 300)
     private String indicaciones;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_tarifa", nullable = false, length = 20)
+    @Column(name = "tipo_tarifa", nullable = false, length = 12)
     private TipoTarifa tipoTarifa;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "metodo_pago", nullable = false, length = 20)
+    @Column(name = "metodo_pago", nullable = false, length = 15)
     private MetodoPago metodoPago;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    /** Se guarda con EstadoPedidoConverter ('EN CAMINO' con espacio). */
+    @Column(nullable = false, length = 12)
     private EstadoPedido estado = EstadoPedido.PENDIENTE;
 
-    /** Calculado por el servidor como suma de los subtotales. */
+    /** Calculado por el servidor como suma de cantidad × precio_unitario. */
     @Column(nullable = false)
     private int total;
 
-    @Column(nullable = false)
-    private Instant fecha = Instant.now();
+    /** Repartidor asignado por la operadora (NULL mientras no se asigna). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_repartidor")
+    private Usuario repartidor;
+
+    /** Dueño del pedido: se toma del JWT, nunca del cuerpo de la solicitud. */
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_cliente", nullable = false)
+    private Usuario cliente;
+
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_zona", nullable = false)
+    private ZonaDespacho zona;
 
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DetallePedido> detalles = new ArrayList<>();
@@ -57,34 +70,40 @@ public class Pedido {
     protected Pedido() {
     }
 
-    public Pedido(Usuario cliente, String direccion, String zona, String indicaciones,
-                  TipoTarifa tipoTarifa, MetodoPago metodoPago) {
+    public Pedido(String codigoTemporal, Usuario cliente, ZonaDespacho zona, String direccion, BigDecimal latitud,
+                  BigDecimal longitud, String indicaciones, TipoTarifa tipoTarifa, MetodoPago metodoPago) {
+        this.codigo = codigoTemporal;
         this.cliente = cliente;
-        this.direccion = direccion;
         this.zona = zona;
+        this.direccion = direccion;
+        this.latitudEntrega = latitud;
+        this.longitudEntrega = longitud;
         this.indicaciones = indicaciones;
         this.tipoTarifa = tipoTarifa;
         this.metodoPago = metodoPago;
     }
 
     public void agregarDetalle(DetallePedido detalle) {
-        detalle.setPedido(this);
         detalles.add(detalle);
         total += detalle.getSubtotal();
     }
 
-    public Long getId() { return id; }
-    public Usuario getCliente() { return cliente; }
-    public Usuario getRepartidor() { return repartidor; }
-    public void setRepartidor(Usuario repartidor) { this.repartidor = repartidor; }
+    public Integer getId() { return id; }
+    public String getCodigo() { return codigo; }
+    public void setCodigo(String codigo) { this.codigo = codigo; }
+    public LocalDateTime getFecha() { return fecha; }
     public String getDireccion() { return direccion; }
-    public String getZona() { return zona; }
+    public BigDecimal getLatitudEntrega() { return latitudEntrega; }
+    public BigDecimal getLongitudEntrega() { return longitudEntrega; }
     public String getIndicaciones() { return indicaciones; }
     public TipoTarifa getTipoTarifa() { return tipoTarifa; }
     public MetodoPago getMetodoPago() { return metodoPago; }
     public EstadoPedido getEstado() { return estado; }
     public void setEstado(EstadoPedido estado) { this.estado = estado; }
     public int getTotal() { return total; }
-    public Instant getFecha() { return fecha; }
+    public Usuario getRepartidor() { return repartidor; }
+    public void setRepartidor(Usuario repartidor) { this.repartidor = repartidor; }
+    public Usuario getCliente() { return cliente; }
+    public ZonaDespacho getZona() { return zona; }
     public List<DetallePedido> getDetalles() { return detalles; }
 }

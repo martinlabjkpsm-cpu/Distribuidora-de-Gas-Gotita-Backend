@@ -6,14 +6,14 @@ import jakarta.persistence.*;
 @Table(name = "producto")
 public class Producto {
 
-    /** Código del negocio (CL001, RG002...). Es la clave primaria y no se repite. */
     @Id
-    @Column(length = 10)
-    private String codigo;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_producto")
+    private Integer id;
 
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @JoinColumn(name = "categoria_id", nullable = false)
-    private Categoria categoria;
+    /** Código del negocio (CL001, RG002...). Único. */
+    @Column(nullable = false, unique = true, length = 10)
+    private String codigo;
 
     @Column(nullable = false, length = 120)
     private String nombre;
@@ -21,10 +21,11 @@ public class Producto {
     @Column(length = 500)
     private String descripcion;
 
+    /** 'Unidad' o 'Kit' (CHECK ck_producto_unidad). */
     @Column(nullable = false, length = 20)
     private String unidad = "Unidad";
 
-    /** Precios en pesos chilenos (enteros, sin decimales). */
+    /** Precios en pesos chilenos (enteros, > 0). */
     @Column(name = "precio_residencial", nullable = false)
     private int precioResidencial;
 
@@ -34,14 +35,26 @@ public class Producto {
     @Column(name = "stock_actual", nullable = false)
     private int stockActual;
 
-    @Column(name = "imagen_src", length = 200)
-    private String imagenSrc;
+    @Column(name = "imagen_url", length = 255)
+    private String imagenUrl;
+
+    /** Aparece en Ofertas. */
+    @Column(nullable = false)
+    private boolean destacado = false;
+
+    /** Un producto ya vendido no se borra: se desactiva. */
+    @Column(nullable = false)
+    private boolean activo = true;
+
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_categoria", nullable = false)
+    private Categoria categoria;
 
     protected Producto() {
     }
 
     public Producto(String codigo, Categoria categoria, String nombre, String descripcion, String unidad,
-                    int precioResidencial, int precioComercial, int stockActual, String imagenSrc) {
+                    int precioResidencial, int precioComercial, int stockActual, String imagenUrl, boolean destacado) {
         this.codigo = codigo;
         this.categoria = categoria;
         this.nombre = nombre;
@@ -50,7 +63,8 @@ public class Producto {
         this.precioResidencial = precioResidencial;
         this.precioComercial = precioComercial;
         this.stockActual = stockActual;
-        this.imagenSrc = imagenSrc;
+        this.imagenUrl = imagenUrl;
+        this.destacado = destacado;
     }
 
     /** El servidor decide el precio según la tarifa; el cliente no lo envía. */
@@ -58,6 +72,7 @@ public class Producto {
         return tarifa == TipoTarifa.COMERCIAL ? precioComercial : precioResidencial;
     }
 
+    public Integer getId() { return id; }
     public String getCodigo() { return codigo; }
     public Categoria getCategoria() { return categoria; }
     public void setCategoria(Categoria categoria) { this.categoria = categoria; }
@@ -73,6 +88,10 @@ public class Producto {
     public void setPrecioComercial(int precioComercial) { this.precioComercial = precioComercial; }
     public int getStockActual() { return stockActual; }
     public void setStockActual(int stockActual) { this.stockActual = stockActual; }
-    public String getImagenSrc() { return imagenSrc; }
-    public void setImagenSrc(String imagenSrc) { this.imagenSrc = imagenSrc; }
+    public String getImagenUrl() { return imagenUrl; }
+    public void setImagenUrl(String imagenUrl) { this.imagenUrl = imagenUrl; }
+    public boolean isDestacado() { return destacado; }
+    public void setDestacado(boolean destacado) { this.destacado = destacado; }
+    public boolean isActivo() { return activo; }
+    public void setActivo(boolean activo) { this.activo = activo; }
 }

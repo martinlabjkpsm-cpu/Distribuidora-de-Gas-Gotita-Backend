@@ -4,6 +4,7 @@ import cl.duoc.backend.dto.CatalogoDtos.CategoriaRequest;
 import cl.duoc.backend.dto.CatalogoDtos.CategoriaResponse;
 import cl.duoc.backend.dto.CatalogoDtos.ProductoRequest;
 import cl.duoc.backend.dto.CatalogoDtos.ProductoResponse;
+import cl.duoc.backend.dto.CatalogoDtos.ZonaResponse;
 import cl.duoc.backend.excepcion.ConflictoException;
 import cl.duoc.backend.excepcion.NoEncontradoException;
 import cl.duoc.backend.excepcion.SolicitudInvalidaException;
@@ -12,23 +13,34 @@ import cl.duoc.backend.modelo.Producto;
 import cl.duoc.backend.repositorio.CategoriaRepository;
 import cl.duoc.backend.repositorio.DetallePedidoRepository;
 import cl.duoc.backend.repositorio.ProductoRepository;
+import cl.duoc.backend.repositorio.ZonaDespachoRepository;
 import java.util.List;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Reglas del catálogo: códigos y nombres únicos, precios/stock no negativos, no borrar lo que está en uso. */
+/** Reglas del catálogo: códigos y nombres únicos, precios > 0, stock >= 0, no borrar lo que está en uso. */
 @Service
 public class CatalogoService {
 
     private final CategoriaRepository categorias;
     private final ProductoRepository productos;
     private final DetallePedidoRepository detalles;
+    private final ZonaDespachoRepository zonas;
 
-    public CatalogoService(CategoriaRepository categorias, ProductoRepository productos, DetallePedidoRepository detalles) {
+    public CatalogoService(CategoriaRepository categorias, ProductoRepository productos,
+                           DetallePedidoRepository detalles, ZonaDespachoRepository zonas) {
         this.categorias = categorias;
         this.productos = productos;
         this.detalles = detalles;
+        this.zonas = zonas;
+    }
+
+    // ---------- Zonas de despacho ----------
+
+    @Transactional(readOnly = true)
+    public List<ZonaResponse> listarZonas() {
+        return zonas.findAll(Sort.by("id")).stream().map(ZonaResponse::de).toList();
     }
 
     // ---------- Categorías ----------
@@ -49,7 +61,7 @@ public class CatalogoService {
 
     /** Renombrar la categoría basta: los productos apuntan a ella por FK, no por nombre. */
     @Transactional
-    public CategoriaResponse renombrarCategoria(Long id, CategoriaRequest req) {
+    public CategoriaResponse renombrarCategoria(Integer id, CategoriaRequest req) {
         Categoria c = categorias.findById(id).orElseThrow(() -> new NoEncontradoException("No existe la categoría " + id));
         String nombre = req.nombre().trim();
         categorias.findByNombreIgnoreCase(nombre)
@@ -60,7 +72,7 @@ public class CatalogoService {
     }
 
     @Transactional
-    public void eliminarCategoria(Long id) {
+    public void eliminarCategoria(Integer id) {
         Categoria c = categorias.findById(id).orElseThrow(() -> new NoEncontradoException("No existe la categoría " + id));
         if (productos.countByCategoriaId(id) > 0) {
             throw new ConflictoException("No se puede eliminar: la categoría tiene productos");
@@ -73,8 +85,8 @@ public class CatalogoService {
     @Transactional(readOnly = true)
     public List<ProductoResponse> listarProductos(String categoria) {
         List<Producto> lista = (categoria == null || categoria.isBlank())
-                ? productos.listarConCategoria()
-                : productos.listarPorCategoria(categoria.trim());
+                ? productos.listarActivos()
+                : productos.listarActivosPorCategoria(categoria.trim());
         return lista.stream().map(ProductoResponse::de).toList();
     }
 
@@ -86,15 +98,16 @@ public class CatalogoService {
     @Transactional
     public ProductoResponse crearProducto(ProductoRequest req) {
         String codigo = req.codigo().trim().toUpperCase();
-        if (productos.existsById(codigo)) {
+        if (productos.existsByCodigo(codigo)) {
             throw new ConflictoException("Ya existe un producto con el código " + codigo);
         }
         Producto p = new Producto(codigo, categoriaPorNombre(req.categoria()), req.nombre().trim(), req.descripcion(),
-                unidadODefecto(req.unidad()), req.precioResidencial(), req.precioComercial(), req.stockActual(), req.imagenSrc());
+                unidadODefecto(req.unidad()), req.precioResidencial(), req.precioComercial(), req.stockActual(),
+                req.imagenSrc(), Boolean.TRUE.equals(req.destacado()));
         return ProductoResponse.de(productos.save(p));
     }
 
-    /** El código es la clave: si el del cuerpo no coincide con el de la URL, es un 400. */
+    /** El código identifica al producto: si el del cuerpo no coincide con el de la URL, es un 400. */
     @Transactional
     public ProductoResponse actualizarProducto(String codigo, ProductoRequest req) {
         Producto p = buscarProducto(codigo);
@@ -108,22 +121,28 @@ public class CatalogoService {
         p.setPrecioResidencial(req.precioResidencial());
         p.setPrecioComercial(req.precioComercial());
         p.setStockActual(req.stockActual());
-        p.setImagenSrc(req.imagenSrc());
+        p.setImagenUrl(req.imagenSrc());
+        p.setDestacado(Boolean.TRUE.equals(req.destacado()));
+        p.setActivo(true);
         return ProductoResponse.de(p);
     }
 
-    /** Un producto que aparece en pedidos no se borra (se perdería el historial): 409. */
+    /**
+     * Si el producto nunca se vendió, se borra. Si aparece en pedidos, se DESACTIVA (activo = false):
+     * deja de mostrarse en el catálogo pero el historial de pedidos se conserva.
+     */
     @Transactional
     public void eliminarProducto(String codigo) {
         Producto p = buscarProducto(codigo);
-        if (detalles.existsByProductoCodigo(p.getCodigo())) {
-            throw new ConflictoException("No se puede eliminar: el producto ya fue vendido en pedidos");
+        if (detalles.existsByProductoId(p.getId())) {
+            p.setActivo(false);
+        } else {
+            productos.delete(p);
         }
-        productos.delete(p);
     }
 
     private Producto buscarProducto(String codigo) {
-        return productos.findById(codigo.trim().toUpperCase())
+        return productos.buscarPorCodigo(codigo.trim().toUpperCase())
                 .orElseThrow(() -> new NoEncontradoException("No existe el producto " + codigo));
     }
 

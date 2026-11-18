@@ -13,7 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/categorias")
+@RequestMapping("/api/v1/categorias")
 @Tag(name = "Categorías")
 public class CategoriaController {
 
@@ -42,7 +42,7 @@ public class CategoriaController {
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Renombrar categoría", description = "ADMINISTRADOR. 404 si no existe, 409 si el nombre ya está en uso.")
-    public CategoriaResponse renombrar(@PathVariable Long id, @Valid @RequestBody CategoriaRequest req) {
+    public CategoriaResponse renombrar(@PathVariable Integer id, @Valid @RequestBody CategoriaRequest req) {
         return catalogo.renombrarCategoria(id, req);
     }
 
@@ -51,7 +51,7 @@ public class CategoriaController {
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Eliminar categoría", description = "ADMINISTRADOR. 409 si todavía tiene productos.")
-    public void eliminar(@PathVariable Long id) {
+    public void eliminar(@PathVariable Integer id) {
         catalogo.eliminarCategoria(id);
     }
 }
