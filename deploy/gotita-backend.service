@@ -1,0 +1,20 @@
+# Servicio systemd: mantiene la API activa en la EC2 y la reinicia si se cae o si se reinicia la instancia.
+# Instalación (ver README §8):
+#   sudo cp deploy/gotita-backend.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now gotita-backend
+[Unit]
+Description=API Gas Gotita (Spring Boot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/backend-gotita
+# Variables (DB_URL, DB_PASSWORD, JWT_SECRET...) desde un archivo fuera de Git
+EnvironmentFile=/home/ubuntu/backend-gotita/.env.local
+ExecStart=/usr/bin/java -jar /home/ubuntu/backend-gotita/target/backend-0.0.1-SNAPSHOT.jar
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
